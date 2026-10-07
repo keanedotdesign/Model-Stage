@@ -1,5 +1,14 @@
 import { create } from "zustand";
+import type { MeshQuality } from "./occt";
 import type { ParsedModel, ViewDirection } from "./types";
+
+/** A parsed STEP file's raw bytes, retained so we can re-tessellate it when the
+ * mesh-quality setting changes. USDZ files aren't tessellated, so they don't
+ * set this. */
+export interface ModelSource {
+  buffer: ArrayBuffer;
+  name: string;
+}
 
 export interface PngExportOptions {
   transparent: boolean;
@@ -15,6 +24,9 @@ export interface VideoExportOptions {
   /** When true, exactly one full turn over `duration`; otherwise spin at the
    * viewer's auto-rotate speed. */
   fullRotation: boolean;
+  /** Render with a transparent background + hidden grid/shadow. Forces a WebM
+   * (VP8/VP9) container, the only MediaRecorder format that carries alpha. */
+  transparent: boolean;
 }
 
 export interface ViewerHandles {
@@ -36,6 +48,11 @@ interface ViewerStore {
   /** Half the model's bounding-box diagonal; scales camera slider ranges. */
   modelRadius: number;
 
+  /** Tessellation quality for STEP files. Changing it re-parses the source. */
+  quality: MeshQuality;
+  /** Retained STEP bytes for re-tessellation (null for USDZ / no model). */
+  source: ModelSource | null;
+
   isRecording: boolean;
   recordProgress: number;
 
@@ -44,6 +61,8 @@ interface ViewerStore {
   setLoading: (fileName: string) => void;
   setModel: (model: ParsedModel, fileName: string) => void;
   setError: (message: string) => void;
+  setQuality: (quality: MeshQuality) => void;
+  setSource: (source: ModelSource | null) => void;
   setRecording: (value: boolean) => void;
   setProgress: (value: number) => void;
   setHandles: (handles: ViewerHandles) => void;
@@ -57,6 +76,8 @@ export const useViewerStore = create<ViewerStore>((set) => ({
   status: "idle",
   error: null,
   modelRadius: 0,
+  quality: "standard",
+  source: null,
 
   isRecording: false,
   recordProgress: 0,
@@ -73,6 +94,8 @@ export const useViewerStore = create<ViewerStore>((set) => ({
       error: null,
     }),
   setError: (message) => set({ status: "error", error: message }),
+  setQuality: (quality) => set({ quality }),
+  setSource: (source) => set({ source }),
   setRecording: (value) =>
     set({ isRecording: value, recordProgress: value ? 0 : 0 }),
   setProgress: (value) => set({ recordProgress: value }),

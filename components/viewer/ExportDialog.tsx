@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, Download, ImageDown, Loader2, Video } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,11 @@ import { Segmented } from "./Segmented";
 import { usePartsStore } from "./parts-store";
 import { useSettingsStore } from "./settings";
 import { useViewerStore } from "@/lib/store";
-import { isVideoExportSupported } from "@/lib/video";
+import { isTransparentVideoSupported, isVideoExportSupported } from "@/lib/video";
 import { exportGlb, exportUsdz } from "@/lib/export-model";
+import { exportStep } from "@/lib/export-step";
+
+type ModelFormat = "glb" | "usdz" | "step";
 
 export function ExportDialog() {
   const handles = useViewerStore((s) => s.handles);
@@ -31,8 +34,11 @@ export function ExportDialog() {
   const isRecording = useViewerStore((s) => s.isRecording);
   const recordProgress = useViewerStore((s) => s.recordProgress);
   const model = useViewerStore((s) => s.model);
+  const source = useViewerStore((s) => s.source);
   const edits = usePartsStore((s) => s.edits);
   const ready = status === "ready" && !!handles;
+  // STEP export needs the original STEP bytes, retained only for STEP files.
+  const canExportStep = !!source;
 
   const totalParts = model?.meshes.length ?? 0;
   const hiddenCount = Object.values(edits).filter((e) => e?.hidden).length;
@@ -46,10 +52,25 @@ export function ExportDialog() {
   const [fps, setFps] = useState(30);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [fullRotation, setFullRotation] = useState(true);
+  const [videoTransparent, setVideoTransparent] = useState(false);
   const videoSupported = isVideoExportSupported();
+  const transparentVideoSupported = isTransparentVideoSupported();
 
-  const [modelFormat, setModelFormat] = useState<"glb" | "usdz">("glb");
+  const [modelFormat, setModelFormat] = useState<ModelFormat>("glb");
   const [savingModel, setSavingModel] = useState(false);
+
+  // STEP is only offered for STEP sources; fall back if the model changes.
+  useEffect(() => {
+    if (modelFormat === "step" && !canExportStep) setModelFormat("glb");
+  }, [modelFormat, canExportStep]);
+
+  const formatOptions: { label: string; value: ModelFormat }[] = [
+    { label: "GLB", value: "glb" },
+    { label: "USDZ", value: "usdz" },
+    ...(canExportStep
+      ? [{ label: "STEP", value: "step" as const }]
+      : []),
+  ];
 
   const handlePng = async () => {
     if (!handles) return;
@@ -69,7 +90,13 @@ export function ExportDialog() {
   const handleVideo = async () => {
     if (!handles) return;
     try {
-      await handles.captureVideo({ duration, fps, direction, fullRotation });
+      await handles.captureVideo({
+        duration,
+        fps,
+        direction,
+        fullRotation,
+        transparent: videoTransparent && transparentVideoSupported,
+      });
       toast.success("Video exported");
     } catch (error) {
       toast.error("Video export failed", {
@@ -95,10 +122,23 @@ export function ExportDialog() {
       };
       const partEdits = usePartsStore.getState().edits;
       const name = useViewerStore.getState().fileName;
-      const count =
-        modelFormat === "glb"
-          ? await exportGlb(current, partEdits, material, name)
-          : await exportUsdz(current, partEdits, material, name);
+      let count: number;
+      if (modelFormat === "step") {
+        const src = useViewerStore.getState().source;
+        if (!src) return;
+        const loading = toast.loading("Preparing STEP export", {
+          description: "Loading the CAD engine (one-time, ~65MB)…",
+        });
+        try {
+          count = await exportStep(src.buffer, current, partEdits, name);
+        } finally {
+          toast.dismiss(loading);
+        }
+      } else if (modelFormat === "glb") {
+        count = await exportGlb(current, partEdits, material, name);
+      } else {
+        count = await exportUsdz(current, partEdits, material, name);
+      }
       toast.success("Model exported", {
         description: `${count} part${count === 1 ? "" : "s"} · ${modelFormat.toUpperCase()}`,
       });
@@ -247,10 +287,31 @@ export function ExportDialog() {
               </span>
             </label>
 
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="video-transparent">Transparent background</Label>
+                <span className="text-xs text-muted-foreground">
+                  {transparentVideoSupported
+                    ? "Exports WebM with an alpha channel (no background or grid)."
+                    : "Not supported in this browser (needs WebM/VP9)."}
+                </span>
+              </div>
+              <Switch
+                id="video-transparent"
+                checked={videoTransparent && transparentVideoSupported}
+                disabled={isRecording || !transparentVideoSupported}
+                onCheckedChange={setVideoTransparent}
+              />
+            </div>
+
             <p className="text-xs text-muted-foreground">
-              {fullRotation
-                ? "Renders exactly one full turn using the current background and grid."
-                : "Spins at the viewer's auto-rotate speed using the current background and grid."}
+              {videoTransparent && transparentVideoSupported
+                ? fullRotation
+                  ? "Renders exactly one full turn on a transparent background (WebM)."
+                  : "Spins at the viewer's auto-rotate speed on a transparent background (WebM)."
+                : fullRotation
+                  ? "Renders exactly one full turn using the current background and grid."
+                  : "Spins at the viewer's auto-rotate speed using the current background and grid."}
             </p>
 
             {isRecording && (
@@ -284,19 +345,17 @@ export function ExportDialog() {
           {/* 3D model */}
           <TabsContent value="model" className="mt-4 flex flex-col gap-4">
             <p className="text-xs text-muted-foreground">
-              Exports the model as you&apos;ve adjusted it — removed parts are
-              excluded and per-part colors + materials are baked in.
+              {modelFormat === "step"
+                ? "Re-exports the original STEP — removed parts are dropped while the remaining parts keep their exact parametric CAD geometry."
+                : "Exports the model as you’ve adjusted it — removed parts are excluded and per-part colors + materials are baked in."}
             </p>
 
             <div className="flex items-center justify-between gap-4">
               <Label>Format</Label>
-              <Segmented<"glb" | "usdz">
+              <Segmented<ModelFormat>
                 value={modelFormat}
                 onChange={setModelFormat}
-                options={[
-                  { label: "GLB", value: "glb" },
-                  { label: "USDZ", value: "usdz" },
-                ]}
+                options={formatOptions}
               />
             </div>
 
@@ -308,9 +367,11 @@ export function ExportDialog() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {modelFormat === "usdz"
-                ? "USDZ opens in iOS / macOS AR Quick Look."
-                : "GLB works with most 3D tools, engines, and web viewers."}
+              {modelFormat === "step"
+                ? "Opens in CAD tools (SolidWorks, Fusion, FreeCAD). Note: colors and PBR materials aren’t stored in STEP — only geometry."
+                : modelFormat === "usdz"
+                  ? "USDZ opens in iOS / macOS AR Quick Look."
+                  : "GLB works with most 3D tools, engines, and web viewers."}
             </p>
 
             <Button onClick={handleModelExport} disabled={!model || savingModel}>

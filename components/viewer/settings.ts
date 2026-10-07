@@ -19,6 +19,8 @@ export interface ViewerSettings {
   edges: boolean;
   edgeColor: string;
   highlightSelection: boolean;
+  /** Easter egg: renders the model like an early-2000s PS2 game. */
+  ps2: boolean;
   // scene
   background: string;
   backgroundMode: "solid" | "gradient";
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: ViewerSettings = {
   edges: false,
   edgeColor: "#05070a",
   highlightSelection: false,
+  ps2: false,
   background: "#0b0f16",
   backgroundMode: "gradient",
   gradientTop: "#000000",
@@ -113,6 +116,7 @@ export type ModelSettings = Pick<
   | "edgeColor"
   | "explode"
   | "highlightSelection"
+  | "ps2"
 >;
 
 export const useUpdate = () => useSettingsStore((s) => s.update);
@@ -135,6 +139,7 @@ export const useModelSettings = (): ModelSettings =>
       edgeColor: s.settings.edgeColor,
       explode: s.settings.explode,
       highlightSelection: s.settings.highlightSelection,
+      ps2: s.settings.ps2,
     })),
   );
 

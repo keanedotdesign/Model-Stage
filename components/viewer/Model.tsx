@@ -11,6 +11,8 @@ import {
   useSelectionStore,
 } from "./selection-store";
 import { usePartsStore } from "./parts-store";
+import { useHistoryStore } from "./history-store";
+import { Ps2Material } from "./Ps2Material";
 
 interface BuiltPart {
   geometry: THREE.BufferGeometry;
@@ -99,22 +101,30 @@ function Part({
         document.body.style.cursor = "auto";
       }}
     >
-      <meshStandardMaterial
-        // Remount when flat shading toggles so three recompiles the material.
-        key={settings.flatShading ? "flat" : "smooth"}
-        color={color}
-        metalness={metalness}
-        roughness={roughness}
-        transparent={dimmed || baseOpacity < 1}
-        opacity={opacity}
-        depthWrite={!dimmed}
-        wireframe={settings.wireframe}
-        flatShading={settings.flatShading}
-        side={THREE.DoubleSide}
-        envMapIntensity={1}
-        emissive={showHover ? HIGHLIGHT_COLOR : emissive}
-        emissiveIntensity={showHover ? 0.16 : emissiveIntensity}
-      />
+      {settings.ps2 ? (
+        <Ps2Material
+          color={color}
+          opacity={opacity}
+          wireframe={settings.wireframe}
+        />
+      ) : (
+        <meshStandardMaterial
+          // Remount when flat shading toggles so three recompiles the material.
+          key={settings.flatShading ? "flat" : "smooth"}
+          color={color}
+          metalness={metalness}
+          roughness={roughness}
+          transparent={dimmed || baseOpacity < 1}
+          opacity={opacity}
+          depthWrite={!dimmed}
+          wireframe={settings.wireframe}
+          flatShading={settings.flatShading}
+          side={THREE.DoubleSide}
+          envMapIntensity={1}
+          emissive={showHover ? HIGHLIGHT_COLOR : emissive}
+          emissiveIntensity={showHover ? 0.16 : emissiveIntensity}
+        />
+      )}
       {settings.edges && !settings.wireframe && (
         <Edges threshold={20} color={settings.edgeColor} />
       )}
@@ -195,6 +205,8 @@ export function Model({
     useSelectionStore.getState().clear();
     useSelectionStore.getState().hover(null);
     usePartsStore.getState().reset();
+    // Fresh model = fresh edit history (baseline captured after the reset).
+    useHistoryStore.getState().reset();
   }, [built]);
 
   if (!built) return null;

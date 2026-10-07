@@ -12,7 +12,7 @@ import {
 import type { ViewDirection } from "@/lib/types";
 import { directionFor, frameCamera } from "@/lib/camera";
 import { baseName, downloadBlob, downloadUrl } from "@/lib/download";
-import { pickVideoMime } from "@/lib/video";
+import { pickAlphaVideoMime, pickVideoMime } from "@/lib/video";
 import { useSettingsStore } from "./settings";
 
 interface OrbitControlsLike {
@@ -99,12 +99,24 @@ export function SceneController({
     const captureVideo = async (options: VideoExportOptions) => {
       const { gl, scene, camera, controls } = store.getState();
       const spin = spinRef.current;
+      const helpers = helpersRef.current;
       const orbit = controls as unknown as OrbitControlsLike | null;
       if (!spin) return;
 
       const prevAutoRotate = orbit?.autoRotate ?? false;
       const prevEnabled = orbit?.enabled ?? true;
       const prevRotation = spin.rotation.y;
+      const prevBackground = scene.background;
+      const prevAlpha = gl.getClearAlpha();
+      const prevHelpersVisible = helpers?.visible ?? true;
+
+      // Transparent export: drop the background + grid/shadow so the alpha
+      // channel is clean. Only WebM (VP8/VP9) can carry that alpha.
+      if (options.transparent) {
+        scene.background = null;
+        gl.setClearAlpha(0);
+        if (helpers) helpers.visible = false;
+      }
 
       // Capture the current background (solid or gradient) and grid as-is. A
       // full rotation is exactly one turn over `duration`; otherwise match the
@@ -122,7 +134,8 @@ export function SceneController({
       }
       spin.rotation.y = 0;
 
-      const { mimeType, extension } = pickVideoMime();
+      const { mimeType, extension } =
+        (options.transparent && pickAlphaVideoMime()) || pickVideoMime();
       const stream = gl.domElement.captureStream(options.fps);
       const recorder = new MediaRecorder(stream, {
         mimeType,
@@ -162,10 +175,17 @@ export function SceneController({
         orbit.autoRotate = prevAutoRotate;
         orbit.enabled = prevEnabled;
       }
+      if (options.transparent) {
+        scene.background = prevBackground;
+        gl.setClearAlpha(prevAlpha);
+        if (helpers) helpers.visible = prevHelpersVisible;
+        gl.render(scene, camera);
+      }
       setRecording(false);
       setProgress(0);
 
-      downloadBlob(blob, `${currentFileName()}-360.${extension}`);
+      const suffix = options.transparent ? "-360-transparent" : "-360";
+      downloadBlob(blob, `${currentFileName()}${suffix}.${extension}`);
     };
 
     const handles: ViewerHandles = {

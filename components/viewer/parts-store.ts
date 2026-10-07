@@ -47,6 +47,8 @@ interface PartsStore {
   setMaterial: (index: number, patch: PartMaterialPatch) => void;
   /** Clear color + material overrides for a part (keeps its visibility). */
   resetPart: (index: number) => void;
+  /** Show only this part, hiding every other part in the model. */
+  isolate: (index: number, total: number) => void;
   showAll: () => void;
   /** Clear all edits (called when a new model loads). */
   reset: () => void;
@@ -92,6 +94,14 @@ export const usePartsStore = create<PartsStore>((set) => ({
         },
       },
     })),
+  isolate: (index, total) =>
+    set((s) => {
+      const edits: Record<number, PartEdit> = { ...s.edits };
+      for (let i = 0; i < total; i++) {
+        edits[i] = { ...(edits[i] ?? DEFAULT_EDIT), hidden: i !== index };
+      }
+      return { edits };
+    }),
   showAll: () =>
     set((s) => {
       const edits: Record<number, PartEdit> = {};

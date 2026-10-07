@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Focus } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -20,6 +20,7 @@ import {
   type PartMaterialPatch,
 } from "./parts-store";
 import { useViewerStore } from "@/lib/store";
+import type { MeshQuality } from "@/lib/occt";
 import type { ParsedModel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -176,9 +177,15 @@ function PartsSection() {
   const hover = useSelectionStore((state) => state.hover);
   const edits = usePartsStore((state) => state.edits);
   const setHidden = usePartsStore((state) => state.setHidden);
+  const isolate = usePartsStore((state) => state.isolate);
   const showAll = usePartsStore((state) => state.showAll);
 
   if (!model || model.meshes.length === 0) return null;
+
+  const total = model.meshes.length;
+  const isIsolated = (i: number) =>
+    !edits[i]?.hidden &&
+    model.meshes.every((_, j) => j === i || edits[j]?.hidden);
 
   const anyHidden = Object.values(edits).some((e) => e?.hidden);
   const allSelected = selected.length === model.meshes.length;
@@ -234,6 +241,24 @@ function PartsSection() {
                 >
                   {mesh.name}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  isIsolated(i) ? showAll() : isolate(i, total)
+                }
+                aria-label={
+                  isIsolated(i) ? "Show all parts" : "Isolate part"
+                }
+                title={isIsolated(i) ? "Show all parts" : "Isolate (hide others)"}
+                className={cn(
+                  "shrink-0 rounded p-1 hover:text-foreground",
+                  isIsolated(i)
+                    ? "text-sky-400"
+                    : "text-muted-foreground",
+                )}
+              >
+                <Focus className="size-3.5" />
               </button>
               <button
                 type="button"
@@ -457,6 +482,43 @@ function MaterialSection() {
   );
 }
 
+const QUALITY_OPTIONS: { label: string; value: MeshQuality }[] = [
+  { label: "Draft", value: "draft" },
+  { label: "Standard", value: "standard" },
+  { label: "High", value: "high" },
+  { label: "Ultra", value: "ultra" },
+];
+
+function GeometrySection() {
+  const quality = useViewerStore((s) => s.quality);
+  const setQuality = useViewerStore((s) => s.setQuality);
+  const source = useViewerStore((s) => s.source);
+  const status = useViewerStore((s) => s.status);
+  const hasStep = !!source;
+
+  return (
+    <Section title="Geometry">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-normal">Mesh quality</Label>
+        </div>
+        <Segmented<MeshQuality>
+          className="w-full"
+          value={quality}
+          onChange={setQuality}
+          options={QUALITY_OPTIONS}
+          disabled={!hasStep || status === "loading"}
+        />
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          {hasStep
+            ? "Higher quality tessellates curved surfaces into more triangles — smoother surfaces and less shimmer, but a slower parse."
+            : "Tessellation quality applies to STEP files."}
+        </p>
+      </div>
+    </Section>
+  );
+}
+
 function DisplaySection() {
   const s = useSettingsStore((state) => state.settings);
   const update = useSettingsStore((state) => state.update);
@@ -610,6 +672,7 @@ export function ControlsPanel() {
     <div className="flex flex-col divide-y divide-border/60 px-4">
       <PartsSection />
       <MaterialSection />
+      <GeometrySection />
 
       <Section title="Scene">
         <div className="flex items-center justify-between gap-3">
@@ -711,6 +774,18 @@ export function ControlsPanel() {
 
       <CameraSection />
       <DisplaySection />
+
+      <Section title="Easter egg">
+        <SwitchRow
+          label="PS2 mode 🎮"
+          checked={s.ps2}
+          onChange={(v) => update({ ps2: v })}
+        />
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Renders the model like an early-2000s PlayStation 2 game — wobbly
+          vertices, flat vertex lighting, and banded colors.
+        </p>
+      </Section>
     </div>
   );
 }

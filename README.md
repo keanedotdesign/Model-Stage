@@ -31,13 +31,23 @@ to WebAssembly) and rendered with [three.js](https://threejs.org/) /
 - **360° video export** — renders a turntable rotation using the current
   background (solid or gradient) and grid, in real time (MP4 or WebM depending on
   browser support), with a **Full 360°** toggle (rotation speed derived from the
-  clip duration), adjustable duration, frame rate, and direction.
+  clip duration), adjustable duration, frame rate, and direction. An optional
+  **transparent background** exports a WebM with an alpha channel (background +
+  grid/shadow dropped) — the only MediaRecorder format that carries alpha.
 - **GLB / USDZ export** — download the edited model (removed parts excluded,
   per-part colors + materials baked in) as binary glTF (`.glb`) or `.usdz` for
-  iOS/macOS AR Quick Look. Note: STEP is import-only, so exports are tessellated
-  meshes, not parametric CAD.
-- **Drag & drop** a `.step` / `.stp` (parsed via occt-import-js) or `.usdz`
-  (parsed via three's USDZ loader) file onto the canvas to load your own model.
+  iOS/macOS AR Quick Look. These are tessellated meshes.
+- **STEP export** (STEP files only) — re-exports the *original* parametric CAD
+  geometry with removed parts dropped, using the full OpenCascade engine
+  (`opencascade.js`, loaded on demand). Visible parts are matched to the source
+  solids by geometry, so the output keeps exact B-rep surfaces — not a mesh.
+  Colors/PBR materials aren't stored (STEP has no such concept).
+- **Drag & drop** a `.step` / `.stp` (parsed via occt-import-js), `.usdz`
+  (parsed via three's USDZ loader), `.fbx` (parsed via three's FBX loader), or
+  `.dwg` (read via libredwg WASM → DXF, mesh entities extracted) file onto the
+  canvas to load your own model. DWG support covers polygonal geometry
+  (polyface/polygon meshes, 3DFACEs, SubD meshes); DWG 3D *solids* are ACIS and
+  can't be tessellated in-browser.
 
 The UI is built with [shadcn/ui](https://ui.shadcn.com/) (Base UI primitives) on a
 dark theme, with a [react-colorful](https://github.com/omgovich/react-colorful)

@@ -36,6 +36,51 @@ interface OcctModule {
   ReadStepFile: (buffer: Uint8Array, params: unknown) => OcctResult;
 }
 
+/**
+ * Tessellation quality. STEP files store exact curved surfaces; the engine has
+ * to approximate them with triangles before we can render. Finer deflection =
+ * more triangles = smoother surfaces (and fine detail resolves cleanly instead
+ * of shimmering) at the cost of a slower parse and more memory.
+ *
+ * `linearDeflection` is a ratio of the model's bounding box; `angularDeflection`
+ * is in radians. "standard" matches the engine's built-in defaults.
+ */
+export type MeshQuality = "draft" | "standard" | "high" | "ultra";
+
+interface QualityParams {
+  linearUnit: "millimeter";
+  linearDeflectionType: "bounding_box_ratio";
+  linearDeflection: number;
+  angularDeflection: number;
+}
+
+const QUALITY_PRESETS: Record<MeshQuality, QualityParams> = {
+  draft: {
+    linearUnit: "millimeter",
+    linearDeflectionType: "bounding_box_ratio",
+    linearDeflection: 0.004,
+    angularDeflection: 1.0,
+  },
+  standard: {
+    linearUnit: "millimeter",
+    linearDeflectionType: "bounding_box_ratio",
+    linearDeflection: 0.001,
+    angularDeflection: 0.5,
+  },
+  high: {
+    linearUnit: "millimeter",
+    linearDeflectionType: "bounding_box_ratio",
+    linearDeflection: 0.0004,
+    angularDeflection: 0.2,
+  },
+  ultra: {
+    linearUnit: "millimeter",
+    linearDeflectionType: "bounding_box_ratio",
+    linearDeflection: 0.0002,
+    angularDeflection: 0.08,
+  },
+};
+
 type OcctFactory = (opts?: {
   locateFile?: (path: string) => string;
 }) => Promise<OcctModule>;
@@ -92,10 +137,13 @@ function firstFaceColor(mesh: OcctResultMesh): [number, number, number] | null {
   return mesh.brep_faces?.find((f) => f.color)?.color ?? null;
 }
 
-export async function parseStep(buffer: ArrayBuffer): Promise<ParsedModel> {
+export async function parseStep(
+  buffer: ArrayBuffer,
+  quality: MeshQuality = "standard",
+): Promise<ParsedModel> {
   const occt = await getModule();
   const data = new Uint8Array(buffer);
-  const result = occt.ReadStepFile(data, null);
+  const result = occt.ReadStepFile(data, QUALITY_PRESETS[quality]);
 
   if (!result || !result.success) {
     throw new Error("This file could not be read as a STEP model.");

@@ -7,7 +7,9 @@ import {
   Maximize2,
   PanelRightClose,
   PanelRightOpen,
+  Redo2,
   RotateCcw,
+  Undo2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,11 @@ import {
 import { useViewerStore } from "@/lib/store";
 import type { ViewDirection } from "@/lib/types";
 import { ExportDialog } from "./ExportDialog";
+import { useHistoryStore } from "./history-store";
+
+const isMac =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+const MOD = isMac ? "⌘" : "Ctrl+";
 
 const VIEWS: { label: string; value: ViewDirection }[] = [
   { label: "Isometric", value: "iso" },
@@ -54,6 +61,11 @@ export function Toolbar({
   const status = useViewerStore((s) => s.status);
   const ready = status === "ready";
 
+  const canUndo = useHistoryStore((s) => s.canUndo);
+  const canRedo = useHistoryStore((s) => s.canRedo);
+  const undo = useHistoryStore((s) => s.undo);
+  const redo = useHistoryStore((s) => s.redo);
+
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 bg-card/60 px-3 backdrop-blur">
       <div className="flex items-center gap-2 pr-1">
@@ -77,7 +89,7 @@ export function Toolbar({
       <input
         ref={inputRef}
         type="file"
-        accept=".step,.stp,.usdz,.STEP,.STP,.USDZ"
+        accept=".step,.stp,.usdz,.fbx,.dwg,.STEP,.STP,.USDZ,.FBX,.DWG"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -94,6 +106,40 @@ export function Toolbar({
         <Upload />
         Open model
       </Button>
+
+      <Separator orientation="vertical" className="mx-0.5 h-6" />
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={!canUndo}
+              onClick={undo}
+            />
+          }
+        >
+          <Undo2 />
+        </TooltipTrigger>
+        <TooltipContent>Undo ({MOD}Z)</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={!canRedo}
+              onClick={redo}
+            />
+          }
+        >
+          <Redo2 />
+        </TooltipTrigger>
+        <TooltipContent>Redo ({MOD}⇧Z)</TooltipContent>
+      </Tooltip>
 
       <Separator orientation="vertical" className="mx-0.5 h-6" />
 

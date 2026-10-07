@@ -30,3 +30,27 @@ export function isVideoExportSupported(): boolean {
     typeof HTMLCanvasElement.prototype.captureStream === "function"
   );
 }
+
+// Only WebM (VP8/VP9) preserves an alpha channel through MediaRecorder — MP4 /
+// H.264 flattens it. Transparent exports must use one of these.
+const ALPHA_CANDIDATES: VideoMime[] = [
+  { mimeType: "video/webm;codecs=vp9", extension: "webm" },
+  { mimeType: "video/webm;codecs=vp8", extension: "webm" },
+  { mimeType: "video/webm", extension: "webm" },
+];
+
+/** Picks an alpha-capable WebM mime, or null if the browser can't produce one. */
+export function pickAlphaVideoMime(): VideoMime | null {
+  if (typeof MediaRecorder !== "undefined") {
+    for (const candidate of ALPHA_CANDIDATES) {
+      if (MediaRecorder.isTypeSupported(candidate.mimeType)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+export function isTransparentVideoSupported(): boolean {
+  return isVideoExportSupported() && pickAlphaVideoMime() !== null;
+}
